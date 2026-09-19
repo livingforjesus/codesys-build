@@ -153,6 +153,9 @@ class BuildTests(unittest.TestCase):
 		self.template.write_text("changed template")
 		self.run_build()
 		self.assertEqual(len(self.compiler.opened), 2)
+		self.assertEqual(self.compiler.opened[0].path, self.compiler.opened[1].path)
+		self.compiler.opened[0].close.assert_called_once()
+		self.assertEqual([p.name for p in self.root.glob("project*")], ["project"])
 	def test_reloads_for_removed_children_and_moved_domains(self):
 		block = spec("function_block", "FB_Test", [spec("method", "Run", implementation="RETURN;")], ["old"], implementation="")
 		self.objects.append(block)

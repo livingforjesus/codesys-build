@@ -1,6 +1,6 @@
 {
 	"name": "codesys-build",
-	"version": "0.1.1",
+	"version": "0.1.2",
 	"description": "Build CODESYS applications from domain-organized Structured Text sources.",
 	"type": "module",
 	"bin": {
@@ -14,12 +14,14 @@
 		"!src/**/*.test.ts",
 		"python/build.py",
 		"python/worker.py",
+		"runtime/install.sh",
 		"README.md",
 		"docs",
 		"examples/**/src/**",
 		"examples/**/templates/*.project",
 		"examples/**/codesys-build.config.ts",
-		"examples/**/README.md"
+		"examples/**/README.md",
+		"examples/**/compose.yaml"
 	],
 	"engines": {
 		"bun": ">=1.3.0"
@@ -29,7 +31,8 @@
 		"test:corpus": "bun tests/corpus/check.ts",
 		"test:python": "python3 -m unittest discover -s python -p 'test_*.py'",
 		"check": "biome check .",
-		"tsc": "tsc --noEmit"
+		"tsc": "tsc --noEmit",
+		"test:runtime": "bun tests/runtime/check.ts"
 	},
 	"dependencies": {
 		"zod": "4.3.6"

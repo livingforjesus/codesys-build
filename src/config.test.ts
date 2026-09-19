@@ -73,3 +73,15 @@ it("merges individual timeout overrides with defaults", () => {
 	expect(config.timeouts.build).toBe(1234);
 	expect(config.timeouts.startup).toBeGreaterThan(0);
 });
+
+it("resolves the runtime compose path against the config file", () => {
+	const config = resolveConfig(
+		{ ...input, runtime: { composeFile: "../compose.yaml" } },
+		"fixtures/plc/config.ts",
+		"linux",
+	);
+	expect(config.runtime).toEqual({
+		composeFile: resolve("fixtures/compose.yaml"),
+		service: "plc",
+	});
+});

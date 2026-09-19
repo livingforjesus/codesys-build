@@ -48,23 +48,31 @@ export const buildProject = async (config: ResolvedConfig) => {
 		);
 		console.log(`CODESYS build: ${config.outDir}`);
 		try {
-			await worker.request(
-				session,
-				{ action: "build" },
-				config.timeouts.build,
-			);
+			await worker.request(session, { action: "build" }, config.timeouts.build);
 			const compiled = await readBuild(directory);
-			await copyFile(compiled.project, resolve(config.outDir, buildFiles.project));
+			await copyFile(
+				compiled.project,
+				resolve(config.outDir, buildFiles.project),
+			);
 			// Builds and runs share the lock. Removing the receipt above keeps a failed
 			// publication from looking complete even if only some files were replaced.
-			await rm(resolve(config.outDir, "runtime"), { recursive: true, force: true });
-			await rename(resolve(directory, "runtime"), resolve(config.outDir, "runtime"));
+			await rm(resolve(config.outDir, "runtime"), {
+				recursive: true,
+				force: true,
+			});
+			await rename(
+				resolve(directory, "runtime"),
+				resolve(config.outDir, "runtime"),
+			);
 			await writeFile(
 				resolve(config.outDir, buildFiles.receipt),
-				JSON.stringify({ mode: "build", application: compiled.application }, null, 2),
+				JSON.stringify(
+					{ mode: "build", application: compiled.application },
+					null,
+					2,
+				),
 			);
-			const result = await readBuild(config.outDir);
-			return result;
+			return await readBuild(config.outDir);
 		} catch (cause) {
 			throw new Error(
 				`CODESYS build failed. Inspect ${directory}/progress.log, error.txt and ${session.directory}/codesys.log`,

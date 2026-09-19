@@ -24,6 +24,7 @@ it("installs a standalone archive with a working CLI and its compiler resources"
 			"src/st/parse.ts",
 			"python/build.py",
 			"python/worker.py",
+			"runtime/install.sh",
 			"docs/sources.md",
 			"examples/frame-assembly/README.md",
 			"examples/frame-assembly/templates/local.project",
@@ -56,7 +57,8 @@ it("installs a standalone archive with a working CLI and its compiler resources"
 			`import { defineConfig } from "codesys-build";
 export const config = defineConfig({
 	codesys: { executable: "CODESYS.exe", profile: "fixture", wine: { prefix: ".wine" } },
-	template: "base.project"
+	template: "base.project",
+	runtime: { composeFile: "compose.yaml" }
 });`,
 		);
 		const installed = resolve(root, "node_modules/codesys-build");
@@ -73,9 +75,13 @@ export const config = defineConfig({
 			{ cwd: dirname(root) },
 		);
 		expect(result.stdout).toContain("entry Main");
-		for (const script of ["build.py", "worker.py"]) {
-			expect(await readFile(resolve(installed, "python", script), "utf8")).toBe(
-				await readFile(resolve(packageRoot, "python", script), "utf8"),
+		for (const script of [
+			"python/build.py",
+			"python/worker.py",
+			"runtime/install.sh",
+		]) {
+			expect(await readFile(resolve(installed, script), "utf8")).toBe(
+				await readFile(resolve(packageRoot, script), "utf8"),
 			);
 		}
 	} finally {

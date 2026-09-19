@@ -11,7 +11,10 @@ Export `const config = defineConfig({...})` from `codesys-build.config.ts`. A de
 | `template` | Required | Existing binary `.project` with active Application, target and libraries. |
 | `sourceDir` | `src` | Recursively scanned ST source tree. |
 | `entry` | `src/Main.st` | Exact combined source or declaration file of a discovered PROGRAM. |
-| `outDir` | `build` | Artifacts, isolated project copies, worker state and logs. |
+| `outDir` | `build` | Stable artifacts plus a bounded `.codesys/` working directory. |
+| `runtime.composeFile` | Unset | Docker Compose file for `run`, relative to the config. |
+| `runtime.service` | `plc` | CODESYS Virtual Control service to install/start. |
+| `timeouts.runtime` | 60,000 ms | Per-Docker-command and application-start deadlines. |
 | `task` | `MainTask` | Existing task whose calls are replaced by the entry program. |
 | `symbols` | `false` | Create a classic symbol configuration if one does not already exist. Existing settings remain intact. |
 | `removeObjects` | `[]` | Template objects to remove by name, recursively, from the private copy. Useful for obsolete demo POUs. |

@@ -27,6 +27,15 @@ export const configSchema = z.strictObject({
 	task: z.string().nonempty().default("MainTask"),
 	removeObjects: z.array(z.string().nonempty()).default([]),
 	symbols: z.boolean().default(false),
+	runtime: z
+		.strictObject({
+			composeFile: pathSchema,
+			service: z
+				.string()
+				.regex(/^[A-Za-z0-9][A-Za-z0-9_.-]*$/)
+				.default("plc"),
+		})
+		.optional(),
 	timeouts: z
 		.strictObject({
 			startup: positiveMilliseconds.default(codesysTimeouts.startup),
@@ -34,6 +43,7 @@ export const configSchema = z.strictObject({
 			stop: positiveMilliseconds.default(codesysTimeouts.stop),
 			terminate: positiveMilliseconds.default(codesysTimeouts.terminate),
 			hostCommand: positiveMilliseconds.default(codesysTimeouts.hostCommand),
+			runtime: positiveMilliseconds.default(codesysTimeouts.runtime),
 		})
 		.prefault({}),
 });
@@ -64,6 +74,12 @@ export const resolveConfig = (
 		sourceDir: resolve(root, parsed.sourceDir),
 		entry: resolve(root, parsed.entry),
 		outDir: resolve(root, parsed.outDir),
+		runtime: parsed.runtime
+			? {
+					...parsed.runtime,
+					composeFile: resolve(root, parsed.runtime.composeFile),
+				}
+			: undefined,
 		codesys: {
 			...parsed.codesys,
 			executable: resolve(root, parsed.codesys.executable),

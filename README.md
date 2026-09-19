@@ -126,7 +126,9 @@ See [source conventions](docs/sources.md) for methods, properties, actions, inte
 ```sh
 codesys-build check
 codesys-build build
-codesys-build open build/run-XXXX/Application.project
+codesys-build run
+codesys-build open
+codesys-build open templates/local.project
 codesys-build launch-worker
 codesys-build stop-worker
 codesys-build build --config path/to/codesys-build.config.ts
@@ -134,20 +136,30 @@ codesys-build build --config path/to/codesys-build.config.ts
 
 The default config path is relative to the working directory. Paths inside a config are relative to that config's directory. The optional project argument to `open` is relative to the working directory.
 
-A successful build produces a new directory:
+Each build replaces the output at the same paths:
 
 ```text
-build/run-XXXX/
-  Template.project           # Snapshot of the input template
-  request.json               # Exact parsed sources and import parameters
-  progress.log
-  Application.project        # Generated CODESYS project
-  runtime/Application.app    # Boot application (and compiler-generated companion files)
-  compiled.json              # Compiler completion receipt
-  success.json               # Host-verified artifact locations
+build/
+  Application.project        # Open with codesys-build open
+  runtime/Application.app    # Boot application
+  runtime/Application.crc    # Matching checksum
+  build.json                 # Completion receipt, published last
+  .codesys/
+    build/                   # Latest request, template snapshot and diagnostics
+    worker/                  # Compiler scripts, log and private working project
+    editor/                  # Latest interactive IDE launcher and log
+    session.json
 ```
 
-Builds only modify private project copies. They do not download to a PLC or change a running application. Open the generated project to inspect it and perform any download through your normal engineering workflow.
+`outDir` controls this directory. Builds reuse these locations instead of retaining `run-*` or session directories. A failed build invalidates `build.json`, so `run` cannot silently deploy an earlier build. The previous published project remains available for inspection; the failed attempt's diagnostics are in `.codesys/build`. `build` does not change the runtime.
+
+To run on CODESYS Virtual Control for Linux in Docker, configure the Compose service:
+
+```ts
+runtime: { composeFile: "compose.yaml", service: "plc" }
+```
+
+Then run `codesys-build build` followed by `codesys-build run`. The latter uses the completed boot files without launching the IDE: it stops only the selected service, installs the matching `.app` and `.crc`, starts the service, and waits for the application's start event in the current runtime log. It does not start a UI, OPC UA bridge, or engineering gateway. See [running in Docker](docs/running.md) and the included [Compose example](examples/frame-assembly/compose.yaml).
 
 One background CODESYS worker is retained per output directory. It reuses the loaded project for text-only changes and reloads the template when object membership, folders, entry selection or template contents change. Source-owned objects replace their template copies, including child objects removed from source. Failed projects are discarded from the worker's cache.
 

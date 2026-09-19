@@ -1,10 +1,12 @@
 #!/usr/bin/env bun
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
+import { buildFiles } from "./artifacts";
 import { buildProject } from "./build";
 import { loadConfig } from "./config";
 import { createCodesysHost } from "./host/codesys-host";
 import { createCodesysWorker, withWorkerLock } from "./host/codesys-worker";
+import { runProject } from "./run";
 import { loadSources } from "./sources";
 
 const { values, positionals } = parseArgs({
@@ -20,15 +22,16 @@ if (values.help || !command) {
 	console.log(`codesys-build <command> [--config path/to/codesys-build.config.ts]
 
   check           Parse sources and validate the entry without launching CODESYS
-  build           Compile an isolated project and export its boot application
-  open [project]  Open a generated project, or the configured template, in the IDE
+  build           Replace the build output with a compiled project and boot application
+  run             Install the completed build in Docker and start its application
+  open [project]  Open the built project (or an explicit project path) in the IDE
   launch-worker   Start or reuse the background build worker
   stop-worker     Stop this project's background build worker
 
 The config module must export a named config. Requires Bun and an installed CODESYS IDE.`);
 } else {
 	if (
-		!["check", "build", "open", "launch-worker", "stop-worker"].includes(
+		!["check", "build", "run", "open", "launch-worker", "stop-worker"].includes(
 			command,
 		)
 	) {
@@ -46,9 +49,11 @@ The config module must export a named config. Requires Bun and an installed CODE
 	} else if (command === "build") {
 		const result = await buildProject(config);
 		console.log(`Completed build. Artifacts: ${result.directory}`);
+	} else if (command === "run") {
+		await runProject(config);
 	} else if (command === "open") {
 		const directory = await createCodesysHost(config).openProject(
-			project ? resolve(project) : config.template,
+			project ? resolve(project) : resolve(config.outDir, buildFiles.project),
 		);
 		console.log(`Opened CODESYS. Log: ${directory}/codesys.log`);
 	} else {

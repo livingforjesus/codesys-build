@@ -1,0 +1,17 @@
+services:
+  plc:
+    image: codesyscontrol_virtuallinuxarm64:4.22.0.0
+    platform: linux/arm64
+    init: true
+    ports:
+      - "127.0.0.1:4840:4840"
+      - "127.0.0.1:11740:11740"
+    cap_add:
+      - SYS_NICE
+      - IPC_LOCK
+    volumes:
+      - plc-conf:/conf/codesyscontrol
+      - plc-data:/data/codesyscontrol
+volumes:
+  plc-conf:
+  plc-data:

@@ -6,6 +6,7 @@ export {
 	type ResolvedConfig,
 	resolveConfig,
 } from "./config";
+export { runProject } from "./run";
 export { loadSources, type SourceObject } from "./sources";
 export { StSyntaxError } from "./st/lexer";
 export { type ObjectKind, type ParsedSource, parseSource } from "./st/parse";

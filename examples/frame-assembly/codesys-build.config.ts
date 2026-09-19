@@ -24,6 +24,7 @@ export const config = defineConfig({
 					},
 				},
 	template: "templates/local.project",
+	runtime: { composeFile: "compose.yaml" },
 	entry: "src/Main.st",
 	task: "MainTask",
 	symbols: true,

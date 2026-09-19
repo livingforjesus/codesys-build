@@ -10,8 +10,11 @@ From the `codesys-build` package directory:
 bun install --frozen-lockfile
 bun src/cli.ts check --config examples/frame-assembly/codesys-build.config.ts
 bun src/cli.ts build --config examples/frame-assembly/codesys-build.config.ts
+bun src/cli.ts run --config examples/frame-assembly/codesys-build.config.ts
 bun src/cli.ts stop-worker --config examples/frame-assembly/codesys-build.config.ts
 ```
+
+Load the CODESYS Virtual Control image named in `compose.yaml` into Docker before using `run`. The package does not distribute runtime images or licenses.
 
 Edit `codesys-build.config.ts` to match your CODESYS installation. The included template uses **CODESYS Virtual Control for Linux ARM64, device version 4.22.0.0**, and a 20 ms `MainTask`. Install that device and the template's library dependencies in CODESYS first, or replace the template with one for your target. A different target may need different type or library definitions.
 
@@ -35,7 +38,7 @@ To use the example as a separate project, copy this directory, install the `code
 | `src/framing/` and `src/hardware/` types | Structure, enum, union, alias and arrays. |
 | `src/generated/` | Snapshot of the original line contract's types and global lists; no dependency on the monorepo's generator. |
 
-`Main` calls input handling, transport, framing and publication in that order. The example runs deterministic demo logic; it is not commissioned machine-control software and contains no runtime deployment command.
+`Main` calls input handling, transport, framing and publication in that order. The example runs deterministic demo logic; it is not commissioned machine-control software and uses the included Compose file for local runtime deployment.
 
 Names in different domain folders still share the application's IEC namespace. Child methods and properties belong to their enclosing POU. For the exact grammar and supported filename combinations, see [source conventions](../../docs/sources.md).
 
@@ -43,4 +46,4 @@ Names in different domain folders still share the application's IEC namespace. C
 
 Built successfully on **2026-09-19** with **CODESYS V3.5 SP22 Patch 3**, **Wine 11.0**, and macOS on Apple Silicon. The build imported all 36 top-level source objects and their child members, rebuilt the reachable application code and exported a non-empty boot application. A second build reused the same worker and loaded project successfully. The package's tests additionally cover source discovery, parsing, import failures and worker lifecycle behavior. Normal application compilation does not validate every unused implementation; see the [parser audit](../../docs/parser-audit.md).
 
-Native Windows and real PLC execution have not been exercised. A successful build verifies the example against this compiler/template combination; it is not a claim that every IEC extension or graphical language is supported.
+Native Windows and physical PLC execution have not been exercised. A successful build verifies the example against this compiler/template combination; it is not a claim that every IEC extension or graphical language is supported.

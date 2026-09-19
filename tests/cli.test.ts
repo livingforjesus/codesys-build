@@ -39,7 +39,7 @@ const withPortableBuild = async (
 	check: (fixture: {
 		root: string;
 		run: (
-			command: "build" | "open" | "launch-worker" | "stop-worker",
+			command: "build" | "run" | "open" | "launch-worker" | "stop-worker",
 			overrides?: { profile?: string },
 		) => Promise<{ stdout: string; stderr: string }>;
 		behavior: (value: Behavior) => Promise<void>;
@@ -161,6 +161,7 @@ setInterval(() => {
 					wine: { prefix: root, binary: compiler, pathBinary: winepath },
 				},
 				template: "templates/local.project",
+				runtime: { composeFile: "compose.yaml" },
 				timeouts: { build: 1000, startup: 2000 },
 			})};`,
 		);
@@ -211,9 +212,16 @@ it("auto-launches and builds a project through the package CLI", async () => {
 			`PROGRAM Main${implementation}END_PROGRAM`,
 		);
 		await run("build");
-		expect(await readFile(resolve(output, "runtime/Application.app"), "utf8")).toBe(implementation);
+		expect(
+			await readFile(resolve(output, "runtime/Application.app"), "utf8"),
+		).toBe(implementation);
 		expect(await Bun.file(resolve(output, "build.json")).exists()).toBe(true);
-		expect((await readdir(output)).sort()).toEqual([".codesys", "Application.project", "build.json", "runtime"]);
+		expect((await readdir(output)).sort()).toEqual([
+			".codesys",
+			"Application.project",
+			"build.json",
+			"runtime",
+		]);
 		expect(
 			await readFile(resolve(root, "templates/local.project"), "utf8"),
 		).toBe("base project");
@@ -246,8 +254,15 @@ it("reuses an explicitly launched IDE across launches and changed-source builds"
 				.text()
 				.catch(() => ""),
 		).toBe(conversions);
-		expect(await readFile(resolve(output, "runtime/Application.app"), "utf8")).toBe(implementation);
-		expect((await readdir(output)).sort()).toEqual([".codesys", "Application.project", "build.json", "runtime"]);
+		expect(
+			await readFile(resolve(output, "runtime/Application.app"), "utf8"),
+		).toBe(implementation);
+		expect((await readdir(output)).sort()).toEqual([
+			".codesys",
+			"Application.project",
+			"build.json",
+			"runtime",
+		]);
 	});
 }, 20_000);
 
@@ -323,7 +338,9 @@ it.each([
 		await withPortableBuild(async ({ run, behavior, output }) => {
 			await behavior(failure);
 			await expect(run("build")).rejects.toThrow(message);
-			expect(await Bun.file(resolve(output, "build.json")).exists()).toBe(false);
+			expect(await Bun.file(resolve(output, "build.json")).exists()).toBe(
+				false,
+			);
 		});
 	},
 	20_000,
@@ -341,7 +358,9 @@ it.each([
 				await expect(run("build")).rejects.toThrow(message);
 				const previousPid = await pid();
 				expect(() => process.kill(previousPid, 0)).toThrow();
-				expect(await Bun.file(resolve(output, "build.json")).exists()).toBe(false);
+				expect(await Bun.file(resolve(output, "build.json")).exists()).toBe(
+					false,
+				);
 				await behavior("success");
 				await run("build");
 				expect(await launches()).toHaveLength(2);
@@ -426,6 +445,7 @@ it("does not kill an unrelated process referenced by stale session metadata", as
 
 it("opens an editable IDE without a persistent script", async () => {
 	await withPortableBuild(async ({ root, run }) => {
+		await run("build");
 		await run("open");
 		const file = resolve(root, "editor-command.txt");
 		const deadline = Date.now() + 3000;
@@ -445,7 +465,7 @@ it("opens an editable IDE without a persistent script", async () => {
 			await realpath(
 				await readFile(resolve(root, "editor-project.txt"), "utf8"),
 			),
-		).toBe(await realpath(resolve(root, "templates/local.project")));
+		).toBe(await realpath(resolve(root, "build/Application.project")));
 	});
 }, 20_000);
 
@@ -471,3 +491,37 @@ it("reports a missing named config export", async () => {
 		).rejects.toThrow("must export a named config");
 	});
 });
+
+it("invalidates the last successful build when the next source validation fails", async () => {
+	await withPortableBuild(async ({ root, run, output }) => {
+		await run("build");
+		const project = await readFile(
+			resolve(output, "Application.project"),
+			"utf8",
+		);
+		await writeFile(resolve(root, "src/Main.st"), "PROGRAM Main\nVAR");
+		await expect(run("build")).rejects.toThrow();
+		expect(await Bun.file(resolve(output, "build.json")).exists()).toBe(false);
+		expect(await readFile(resolve(output, "Application.project"), "utf8")).toBe(
+			project,
+		);
+		await expect(run("run")).rejects.toThrow("No complete build");
+	});
+}, 20_000);
+
+it("replaces runtime artifacts instead of retaining files from the previous build", async () => {
+	await withPortableBuild(async ({ run, output }) => {
+		await run("build");
+		await writeFile(
+			resolve(output, "runtime/obsolete.asset"),
+			"old compiler output",
+		);
+		await run("build");
+		expect(
+			await Bun.file(resolve(output, "runtime/obsolete.asset")).exists(),
+		).toBe(false);
+		expect(
+			(await readdir(output)).filter((name) => name.startsWith("run-")),
+		).toEqual([]);
+	});
+}, 20_000);

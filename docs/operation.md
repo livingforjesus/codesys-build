@@ -2,7 +2,7 @@
 
 ## Build ownership
 
-Every build snapshots the configured template and parsed source contents before sending the request to a worker. Only a private project copy is modified. The worker emits a compiler receipt after checking diagnostics, generating code, saving the project and producing a non-empty boot application. The CLI also checks the receipt and non-empty artifacts before creating `success.json`.
+Every build snapshots the configured template and parsed source contents before sending the request to a worker. Only a private project copy is modified. The worker emits a compiler receipt after checking diagnostics, generating code, saving the project and producing a non-empty boot application. The CLI also checks the receipt and non-empty artifacts before publishing `build.json`.
 
 Source changes do not require restarting the worker. Changes to the CODESYS installation/profile or package's Python scripts require `stop-worker`, then another build. Object additions/removals/moves, template changes and entry changes reopen the template automatically so old source-owned children cannot survive.
 
@@ -13,10 +13,10 @@ Timeouts terminate only a worker launched by that invocation or one that has ans
 ## Inspecting a failure
 
 1. Read the CLI error and its cause.
-2. Check `build/run-*/progress.log` for the last completed phase.
-3. Read `error.txt` for the CODESYS scripting/compiler traceback.
-4. Read `build/ide/session-*/codesys.log` for startup or installation errors.
-5. Open the diagnostic `Application.project`, when one was saved, in a separate IDE window.
+2. Check `build/.codesys/build/progress.log` for the last completed phase.
+3. Read `build/.codesys/build/error.txt` for the CODESYS scripting/compiler traceback.
+4. Read `build/.codesys/worker/codesys.log` for startup or installation errors.
+5. Open the diagnostic `build/.codesys/build/Application.project`, when one was saved, in a separate IDE window.
 
 The template is not saved on failures. A partially imported project is never reused for the next build.
 
@@ -34,3 +34,11 @@ The template is not saved on failures. A partially imported project is never reu
 ## Portable package checks
 
 `bun pm pack` packages TypeScript runtime code and the Python worker together. Test the produced archive in an empty project before publishing; running directly from a checkout alone does not validate package contents. Publication is a separate, explicit action.
+
+## Output lifecycle
+
+The published `Application.project`, `runtime/`, and `build.json` have stable paths. `.codesys/build` keeps one attempt, and `.codesys/worker/project` keeps one working project. Rebuilding replaces runtime artifacts, including removing obsolete files. All build/run operations use the same lock; never delete the output directory while a command or worker is active. Stop the worker before manually cleaning the directory.
+
+When upgrading from the old layout, stop the old worker with the old package version, then remove the old generated `run-*`, `ide/`, and `editor-*` directories once. The new package does not discover or delete historical directories that could be open in an IDE.
+
+`run` requires a complete build and a configured Docker service. It reports success only after the runtime log records the target application starting in this container boot. See [running in Docker](running.md) for deployment semantics and failure diagnosis.

@@ -20,9 +20,15 @@ export const readBuild = async (directory: string) => {
 		JSON.parse(await readFile(resolve(directory, buildFiles.receipt), "utf8")),
 	);
 	if (!receipt.success) {
-		throw new Error("CODESYS did not produce a valid build receipt", { cause: receipt.error });
+		throw new Error("CODESYS did not produce a valid build receipt", {
+			cause: receipt.error,
+		});
 	}
-	for (const file of [buildFiles.project, buildFiles.output, buildFiles.checksum]) {
+	for (const file of [
+		buildFiles.project,
+		buildFiles.output,
+		buildFiles.checksum,
+	]) {
 		const artifact = await stat(resolve(directory, file));
 		if (!artifact.isFile() || artifact.size === 0) {
 			throw new Error(`CODESYS produced an empty artifact: ${file}`);
