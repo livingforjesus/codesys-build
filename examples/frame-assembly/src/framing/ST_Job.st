@@ -1,0 +1,6 @@
+TYPE ST_Job :
+STRUCT
+	Id : UDINT;
+	Measurements : ARRAY [1..4] OF REAL;
+END_STRUCT
+END_TYPE

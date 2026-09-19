@@ -1,0 +1,2 @@
+TYPE T_Registers : ARRAY [0..7] OF WORD;
+END_TYPE

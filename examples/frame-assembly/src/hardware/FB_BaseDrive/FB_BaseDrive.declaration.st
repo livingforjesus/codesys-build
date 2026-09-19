@@ -1,0 +1,4 @@
+FUNCTION_BLOCK FB_BaseDrive
+VAR
+	Faulted : BOOL;
+END_VAR

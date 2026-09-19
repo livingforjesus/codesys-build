@@ -1,0 +1,1 @@
+PROPERTY PUBLIC IsRunning : BOOL
