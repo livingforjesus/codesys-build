@@ -20,10 +20,8 @@ def write_json(path, value):
 	os.rename(path + ".tmp", path)
 
 
-def run_build(engine, directory, name, loaded):
-	if not name.startswith("run-") or os.path.basename(name) != name:
-		raise ValueError("Invalid build directory")
-	root = os.path.join(os.path.dirname(os.path.dirname(directory)), name)
+def run_build(engine, directory, loaded):
+	root = os.path.join(os.path.dirname(directory), "build")
 	with io.open(os.path.join(root, "request.json"), "r", encoding="utf-8") as source:
 		request = json.load(source)
 	for key in ("template", "project", "output", "receipt"):
@@ -50,7 +48,7 @@ def serve(engine, directory):
 		response = {"id": command["id"], "ok": True}
 		try:
 			if command["action"] == "build":
-				run_build(engine, directory, command["directory"], loaded)
+				run_build(engine, directory, loaded)
 			elif command["action"] not in ("ping", "stop"):
 				raise ValueError("Unknown worker action")
 		except Exception:

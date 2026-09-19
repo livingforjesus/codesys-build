@@ -1,6 +1,6 @@
 {
 	"name": "codesys-build",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"description": "Build CODESYS applications from domain-organized Structured Text sources.",
 	"type": "module",
 	"bin": {

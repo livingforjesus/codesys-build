@@ -11,15 +11,14 @@ class WorkerTests(unittest.TestCase):
 	def run_worker(self, actions, compile):
 		with tempfile.TemporaryDirectory() as temporary:
 			root = Path(temporary)
-			session = root / "build" / "ide" / "session-fixture"
+			session = root / "build" / ".codesys" / "worker"
 			session.mkdir(parents=True)
 			commands = []
 			for index, action in enumerate(actions + ["stop"]):
 				command = {"id": str(index), "action": action}
 				if action == "build":
-					command["directory"] = "run-" + str(index)
-					output = root / "build" / command["directory"]
-					output.mkdir()
+					output = session.parent / "build"
+					output.mkdir(exist_ok=True)
 					(output / "request.json").write_text(json.dumps({
 						"mode": "build", "objects": [], "project": "FrameAssembly.project",
 						
@@ -34,7 +33,7 @@ class WorkerTests(unittest.TestCase):
 			with patch("worker.build", side_effect=compile):
 				serve(engine, str(session))
 			responses = [json.loads((session / (command["id"] + ".json")).read_text()) for command in commands]
-			errors = [path.read_text() for path in (root / "build").glob("run-*/error.txt")]
+			errors = [path.read_text() for path in (session.parent / "build").glob("error.txt")]
 			return responses, errors
 
 	def test_handles_multiple_builds_and_health_checks_without_exiting(self):
@@ -45,7 +44,7 @@ class WorkerTests(unittest.TestCase):
 		self.assertTrue(all(response["ok"] for response in responses))
 		self.assertEqual(errors, [])
 		self.assertEqual(len(requests), 2)
-		self.assertNotEqual(requests[0]["project"], requests[1]["project"])
+		self.assertEqual(requests[0]["project"], requests[1]["project"])
 		for request in requests:
 			project = Path(request["project"])
 			self.assertTrue(project.is_absolute())

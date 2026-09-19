@@ -1,5 +1,5 @@
 import { execFile, spawn } from "node:child_process";
-import { access, mkdir, mkdtemp, open, writeFile } from "node:fs/promises";
+import { access, mkdir, open, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { promisify } from "node:util";
 import type { ResolvedConfig } from "../config";
@@ -79,8 +79,8 @@ export const createCodesysHost = (config: ResolvedConfig) => {
 		openProject: async (project: string) => {
 			await access(project);
 			await check();
-			await mkdir(config.outDir, { recursive: true });
-			const directory = await mkdtemp(resolve(config.outDir, "editor-"));
+			const directory = resolve(config.outDir, ".codesys/editor");
+			await mkdir(directory, { recursive: true });
 			// A persistent --runscript disables editing; only the worker runs a script.
 			await launch(directory, editorCommand, {
 				CODESYS_BUILD_PROJECT: await toWindowsPath(project, codesys.wine),

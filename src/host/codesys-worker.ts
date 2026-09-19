@@ -4,10 +4,10 @@ import {
 	access,
 	copyFile,
 	mkdir,
-	mkdtemp,
 	open,
 	readFile,
 	rename,
+	rm,
 	unlink,
 	writeFile,
 } from "node:fs/promises";
@@ -31,9 +31,7 @@ const sessionSchema = z.object({
 
 type Session = z.infer<typeof sessionSchema>;
 
-type WorkerCommand =
-	| { action: "build"; directory: string }
-	| { action: "ping" | "stop" };
+type WorkerCommand = { action: "build" | "ping" | "stop" };
 
 const hasCode = (error: unknown, code: string) =>
 	error instanceof Error && "code" in error && error.code === code;
@@ -76,8 +74,8 @@ export const withWorkerLock = async <T>(
 	config: ResolvedConfig,
 	run: () => Promise<T>,
 ) => {
-	await mkdir(resolve(config.outDir, "ide"), { recursive: true });
-	const path = resolve(config.outDir, "ide/command.lock");
+	await mkdir(resolve(config.outDir, ".codesys"), { recursive: true });
+	const path = resolve(config.outDir, ".codesys/command.lock");
 	const deadline = Date.now() + config.timeouts.build + config.timeouts.startup;
 	while (true) {
 		const lock = await open(path, "wx").catch((error: unknown) => {
@@ -123,7 +121,7 @@ export const withWorkerLock = async <T>(
 /** The caller holds withWorkerLock throughout a command, so the mailbox has one writer. */
 export const createCodesysWorker = (config: ResolvedConfig) => {
 	const host = createCodesysHost(config);
-	const statePath = resolve(config.outDir, "ide/session.json");
+	const statePath = resolve(config.outDir, ".codesys/session.json");
 	const verifiedProcesses = new Set<number>();
 
 	const readSession = async (): Promise<Session | undefined> => {
@@ -241,7 +239,9 @@ export const createCodesysWorker = (config: ResolvedConfig) => {
 			return previous;
 		}
 
-		const directory = await mkdtemp(resolve(config.outDir, "ide/session-"));
+		const directory = resolve(config.outDir, ".codesys/worker");
+		await rm(directory, { recursive: true, force: true });
+		await mkdir(directory, { recursive: true });
 		await copyFile(
 			resolve(pythonDirectory, "build.py"),
 			resolve(directory, "build.py"),

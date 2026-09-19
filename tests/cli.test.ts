@@ -32,7 +32,8 @@ type Behavior =
 	| "crash"
 	| "startup-timeout"
 	| "empty-output"
-	| "missing-project";
+	| "missing-project"
+	| "missing-checksum";
 
 const withPortableBuild = async (
 	check: (fixture: {
@@ -42,7 +43,7 @@ const withPortableBuild = async (
 			overrides?: { profile?: string },
 		) => Promise<{ stdout: string; stderr: string }>;
 		behavior: (value: Behavior) => Promise<void>;
-		outputs: () => Promise<Array<string>>;
+		output: string;
 		pid: () => Promise<number>;
 		launches: () => Promise<Array<string>>;
 	}) => Promise<void>,
@@ -54,7 +55,7 @@ const withPortableBuild = async (
 	const winepath = resolve(root, "winepath.cjs");
 	const pid = async () => {
 		const value: unknown = JSON.parse(
-			await readFile(resolve(root, "build/ide/session.json"), "utf8"),
+			await readFile(resolve(root, "build/.codesys/session.json"), "utf8"),
 		);
 		return z.object({ pid: z.number().int().positive() }).parse(value).pid;
 	};
@@ -122,13 +123,14 @@ setInterval(() => {
   fs.unlinkSync(mailbox);
   const response = { id: command.id, ok: true };
   if (command.action === "build") {
-    const directory = path.join(root, "build", command.directory);
+    const directory = path.join(root, "build/.codesys/build");
     const request = JSON.parse(fs.readFileSync(path.join(directory, "request.json"), "utf8"));
     const behavior = fs.readFileSync(path.join(root, "behavior.txt"), "utf8");
     if (behavior === "timeout") { blocked = true; return; }
     fs.writeFileSync(path.join(directory, request.output), behavior === "empty-output" ? "" : request.objects.find(object => object.name === request.entry).implementation);
+    if (behavior !== "missing-checksum") fs.writeFileSync(path.join(directory, "runtime/Application.crc"), "checksum");
     if (behavior !== "missing-project") fs.writeFileSync(path.join(directory, request.project), "compiled project");
-    if (behavior !== "missing-receipt") fs.writeFileSync(path.join(directory, request.receipt), JSON.stringify({ mode: behavior === "invalid-receipt" ? "invalid" : "build" }));
+    if (behavior !== "missing-receipt") fs.writeFileSync(path.join(directory, request.receipt), JSON.stringify({ mode: behavior === "invalid-receipt" ? "invalid" : "build", application: "Application" }));
     if (behavior === "crash") process.exit(2);
     if (behavior === "invalid-response") response.ok = "true";
     if (behavior === "failure") { response.ok = false; response.error = "Fixture compiler error"; }
@@ -168,10 +170,7 @@ setInterval(() => {
 				(await readFile(resolve(root, "launches.txt"), "utf8"))
 					.trim()
 					.split("\n"),
-			outputs: async () =>
-				(await readdir(resolve(root, "build")))
-					.filter((name) => name.startsWith("run-"))
-					.map((name) => resolve(root, "build", name)),
+			output: resolve(root, "build"),
 			pid,
 			root,
 			run,
@@ -204,7 +203,7 @@ setInterval(() => {
 };
 
 it("auto-launches and builds a project through the package CLI", async () => {
-	await withPortableBuild(async ({ root, run, outputs }) => {
+	await withPortableBuild(async ({ root, run, output }) => {
 		const implementation =
 			"\nLineIO.Conveyor_Inbound.Cards[1].Output.MotionAsserted := TRUE;\n";
 		await writeFile(
@@ -212,16 +211,9 @@ it("auto-launches and builds a project through the package CLI", async () => {
 			`PROGRAM Main${implementation}END_PROGRAM`,
 		);
 		await run("build");
-		const directories = await outputs();
-		expect(directories).toHaveLength(1);
-		for (const directory of directories) {
-			expect(
-				await readFile(resolve(directory, "runtime/Application.app"), "utf8"),
-			).toBe(implementation);
-			expect(await Bun.file(resolve(directory, "success.json")).exists()).toBe(
-				true,
-			);
-		}
+		expect(await readFile(resolve(output, "runtime/Application.app"), "utf8")).toBe(implementation);
+		expect(await Bun.file(resolve(output, "build.json")).exists()).toBe(true);
+		expect((await readdir(output)).sort()).toEqual([".codesys", "Application.project", "build.json", "runtime"]);
 		expect(
 			await readFile(resolve(root, "templates/local.project"), "utf8"),
 		).toBe("base project");
@@ -229,7 +221,7 @@ it("auto-launches and builds a project through the package CLI", async () => {
 }, 20_000);
 
 it("reuses an explicitly launched IDE across launches and changed-source builds", async () => {
-	await withPortableBuild(async ({ root, run, pid, launches, outputs }) => {
+	await withPortableBuild(async ({ root, run, pid, launches, output }) => {
 		await run("launch-worker");
 		expect(
 			await readFile(resolve(root, "worker-command.txt"), "utf8"),
@@ -254,20 +246,13 @@ it("reuses an explicitly launched IDE across launches and changed-source builds"
 				.text()
 				.catch(() => ""),
 		).toBe(conversions);
-		const directories = await outputs();
-		expect(directories).toHaveLength(2);
-		const artifacts = await Promise.all(
-			directories.map((directory) =>
-				readFile(resolve(directory, "runtime/Application.app"), "utf8"),
-			),
-		);
-		expect(artifacts).toContain(implementation);
-		expect(new Set(artifacts).size).toBe(2);
+		expect(await readFile(resolve(output, "runtime/Application.app"), "utf8")).toBe(implementation);
+		expect((await readdir(output)).sort()).toEqual([".codesys", "Application.project", "build.json", "runtime"]);
 	});
 }, 20_000);
 
 it("serializes simultaneous launches and builds into one worker", async () => {
-	await withPortableBuild(async ({ run, launches, outputs }) => {
+	await withPortableBuild(async ({ run, launches, output }) => {
 		const results = await Promise.allSettled([
 			run("launch-worker"),
 			run("build"),
@@ -279,30 +264,20 @@ it("serializes simultaneous launches and builds into one worker", async () => {
 			}
 		}
 		expect(await launches()).toHaveLength(1);
-		const directories = await outputs();
-		expect(directories).toHaveLength(2);
-		for (const directory of directories) {
-			expect(await Bun.file(resolve(directory, "success.json")).exists()).toBe(
-				true,
-			);
-		}
+		expect(await Bun.file(resolve(output, "build.json")).exists()).toBe(true);
 	});
 }, 20_000);
 
 it("sends the fingerprint of each copied template so the worker can invalidate its loaded project", async () => {
-	await withPortableBuild(async ({ root, run, outputs }) => {
+	await withPortableBuild(async ({ root, run, output }) => {
 		await run("launch-worker");
 		for (const template of [
 			"device configuration A",
 			"device configuration B",
 		]) {
 			await writeFile(resolve(root, "templates/local.project"), template);
-			const previous = new Set(await outputs());
 			await run("build");
-			const directory = (await outputs()).find((path) => !previous.has(path));
-			if (!directory) {
-				throw new Error("Missing build output directory");
-			}
+			const directory = resolve(output, ".codesys/build");
 			const request: unknown = await Bun.file(
 				resolve(directory, "request.json"),
 			).json();
@@ -318,14 +293,10 @@ it("sends the fingerprint of each copied template so the worker can invalidate i
 }, 20_000);
 
 it("rejects a failed build even with a receipt and reuses the worker after correction", async () => {
-	await withPortableBuild(async ({ run, behavior, launches, outputs }) => {
+	await withPortableBuild(async ({ run, behavior, launches, output }) => {
 		await behavior("failure");
 		await expect(run("build")).rejects.toThrow("Fixture compiler error");
-		for (const directory of await outputs()) {
-			expect(await Bun.file(resolve(directory, "success.json")).exists()).toBe(
-				false,
-			);
-		}
+		expect(await Bun.file(resolve(output, "build.json")).exists()).toBe(false);
 		await behavior("success");
 		await run("build");
 		expect(await launches()).toHaveLength(1);
@@ -333,35 +304,26 @@ it("rejects a failed build even with a receipt and reuses the worker after corre
 }, 20_000);
 
 it("rejects a completed request without a compiler receipt", async () => {
-	await withPortableBuild(async ({ run, behavior, outputs }) => {
+	await withPortableBuild(async ({ run, behavior, output }) => {
 		await behavior("missing-receipt");
-		await expect(run("build")).rejects.toThrow("compiled.json");
-		for (const directory of await outputs()) {
-			expect(await Bun.file(resolve(directory, "success.json")).exists()).toBe(
-				false,
-			);
-		}
+		await expect(run("build")).rejects.toThrow("build.json");
+		expect(await Bun.file(resolve(output, "build.json")).exists()).toBe(false);
 	});
 }, 20_000);
 
 it.each([
 	{ failure: "invalid-response", message: "invalid worker response" },
-	{ failure: "invalid-receipt", message: "valid success receipt" },
+	{ failure: "invalid-receipt", message: "valid build receipt" },
 	{ failure: "empty-output", message: "empty artifact" },
 	{ failure: "missing-project", message: "Application.project" },
+	{ failure: "missing-checksum", message: "Application.crc" },
 ] as const)(
 	"rejects a build with an $failure",
 	async ({ failure, message }) => {
-		await withPortableBuild(async ({ run, behavior, outputs }) => {
+		await withPortableBuild(async ({ run, behavior, output }) => {
 			await behavior(failure);
 			await expect(run("build")).rejects.toThrow(message);
-			const directories = await outputs();
-			expect(directories).toHaveLength(1);
-			for (const directory of directories) {
-				expect(
-					await Bun.file(resolve(directory, "success.json")).exists(),
-				).toBe(false);
-			}
+			expect(await Bun.file(resolve(output, "build.json")).exists()).toBe(false);
 		});
 	},
 	20_000,
@@ -374,16 +336,12 @@ it.each([
 	"restarts the worker after a build $failure without accepting incomplete output",
 	async ({ failure, message }) => {
 		await withPortableBuild(
-			async ({ run, behavior, pid, launches, outputs }) => {
+			async ({ run, behavior, pid, launches, output }) => {
 				await behavior(failure);
 				await expect(run("build")).rejects.toThrow(message);
 				const previousPid = await pid();
 				expect(() => process.kill(previousPid, 0)).toThrow();
-				for (const directory of await outputs()) {
-					expect(
-						await Bun.file(resolve(directory, "success.json")).exists(),
-					).toBe(false);
-				}
+				expect(await Bun.file(resolve(output, "build.json")).exists()).toBe(false);
 				await behavior("success");
 				await run("build");
 				expect(await launches()).toHaveLength(2);
@@ -444,7 +402,7 @@ it("does not kill an unrelated process referenced by stale session metadata", as
 			throw new Error("Fixture process has no PID");
 		}
 		try {
-			const path = resolve(root, "build/ide/session.json");
+			const path = resolve(root, "build/.codesys/session.json");
 			const saved: unknown = JSON.parse(await readFile(path, "utf8"));
 			if (!saved || typeof saved !== "object") {
 				throw new Error("Missing saved session");
@@ -473,11 +431,9 @@ it("opens an editable IDE without a persistent script", async () => {
 		const deadline = Date.now() + 3000;
 		while (!(await stat(file).catch(() => undefined))) {
 			if (Date.now() > deadline) {
-				const editor = (await readdir(resolve(root, "build"))).find((name) =>
-					name.startsWith("editor-"),
-				);
+				const editor = resolve(root, "build/.codesys/editor");
 				throw new Error(
-					`Fixture editor did not start: ${editor ? await readFile(resolve(root, "build", editor, "codesys.log"), "utf8") : "No editor directory"}`,
+					`Fixture editor did not start: ${editor ? await readFile(resolve(editor, "codesys.log"), "utf8") : "No editor directory"}`,
 				);
 			}
 			await Bun.sleep(20);

@@ -5,7 +5,6 @@ import io
 import json
 import os
 import shutil
-import tempfile
 import time
 
 
@@ -159,7 +158,10 @@ def build(engine, request, loaded, workspace):
 			loaded.clear()
 			progress("Opening project")
 			project = engine.projects.open(request["template"], primary=True)
-			working = tempfile.mkdtemp(prefix="project-", dir=workspace)
+			working = os.path.join(workspace, "project")
+			if os.path.isdir(working):
+				shutil.rmtree(working)
+			os.mkdir(working)
 			project.save_as(os.path.join(working, "Application.project"))
 		loaded.clear()
 		application = project.active_application
@@ -186,8 +188,8 @@ def build(engine, request, loaded, workspace):
 		application.generate_code()
 		fail_on_errors(engine)
 		project.save()
-		# Keep the open file private to the worker. Each run gets a saved snapshot
-		# that the interactive IDE can open without conflicting with the worker.
+		# Keep the open file private to the worker; the published project can be
+		# opened interactively without conflicting with this persistent compiler.
 		shutil.copyfile(project.path, request["project"])
 		progress("Exporting boot application")
 		application.create_boot_application(request["output"], False, False)
@@ -197,7 +199,7 @@ def build(engine, request, loaded, workspace):
 		progress("Build complete")
 		with io.open(request["receipt"], "w", encoding="utf-8") as receipt:
 			receipt.write(json.dumps(
-				{"mode": request["mode"], "output": request["output"]},
+				{"mode": request["mode"], "application": application.get_name()},
 				ensure_ascii=False,
 			))
 		loaded.update({"key": key, "project": project})
