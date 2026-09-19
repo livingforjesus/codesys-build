@@ -164,3 +164,5 @@ bun run check
 ```
 
 Unit tests cover parsing, discovery and configuration. CLI tests use a fake CODESYS executable to exercise real subprocesses, locking, worker reuse, failures and artifacts. Python tests replace only the CODESYS API. Those tests do not substitute for the real compiler verification recorded with the example.
+
+The [parser audit](docs/parser-audit.md) records checks against 5,068 real source objects, seeded adversarial tests, compiler probes and known boundary ambiguities. Normal CODESYS application compilation covers reachable POUs; unused implementations can still contain compiler errors.

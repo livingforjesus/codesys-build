@@ -1,0 +1,26 @@
+[
+	{
+		"repository": "tcunit/TcUnit",
+		"revision": "d447f95dff584cd9ae856784b189315a05ff93f1",
+		"format": "twincat",
+		"objects": 512
+	},
+	{
+		"repository": "TcOpenGroup/TcOpen",
+		"revision": "1756327443e8bb98db6334eb1d72fbfa1f59baaf",
+		"format": "twincat",
+		"objects": 3911
+	},
+	{
+		"repository": "TcHaxx/snappy",
+		"revision": "adbf6018f09bd1c28d552245c99e0ebf6820edc2",
+		"format": "twincat",
+		"objects": 86
+	},
+	{
+		"repository": "simsum/oscat",
+		"revision": "ccc5f45ebda082d0f87f50eadf23ff29e39cf9ba",
+		"format": "oscat",
+		"objects": 559
+	}
+]

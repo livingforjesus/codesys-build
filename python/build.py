@@ -52,7 +52,9 @@ def create_object(engine, parent, spec):
 	if kind == "function_block":
 		return parent.create_function_block(name)
 	if kind == "function":
-		return parent.create_function(name, spec["returnType"])
+		# The creation API requires a type even for a no-return function. Importing
+		# its complete declaration below replaces this temporary BOOL header.
+		return parent.create_function(name, spec.get("returnType", "BOOL"))
 	if kind == "interface":
 		return parent.create_interface(name)
 	if kind == "method":

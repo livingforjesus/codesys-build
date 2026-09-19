@@ -241,8 +241,11 @@ it.each([
 	["PROGRAM Main\nVAR\n X : INT;\nVAR_INPUT\n", "Missing END_VAR"],
 	["PROGRAM Main\nRETURN;", "Missing END_PROGRAM"],
 	["PROGRAM Main\nEND_FUNCTION_BLOCK", "Missing END_PROGRAM"],
-	["FUNCTION F_Read\nEND_FUNCTION", "requires a return type"],
-	["PROGRAM Main\nVAR_FUTURE\nEND_PROGRAM", "Variable declaration outside"],
+	["FUNCTION F_Read :\nEND_FUNCTION", "Expected an IEC identifier"],
+	[
+		"PROGRAM Main\nVAR_FUTURE\n X : INT;\nEND_VAR\nEND_PROGRAM",
+		"Variable declaration outside",
+	],
 	[
 		"PROGRAM Main\n{IF defined(X)}\nVAR\n X : INT;\nEND_VAR\n{END_IF}\nEND_PROGRAM",
 		"Variable declaration outside",

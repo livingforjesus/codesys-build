@@ -41,6 +41,6 @@ Names in different domain folders still share the application's IEC namespace. C
 
 ## Verification
 
-Built successfully on **2026-09-19** with **CODESYS V3.5 SP22 Patch 3**, **Wine 11.0**, and macOS on Apple Silicon. The real compiler rebuilt the application, generated code and exported a non-empty boot application from all 36 top-level source objects and their child members. A second build reused the same worker and loaded project successfully. The package's tests additionally cover source discovery, parsing, import failures and worker lifecycle behavior.
+Built successfully on **2026-09-19** with **CODESYS V3.5 SP22 Patch 3**, **Wine 11.0**, and macOS on Apple Silicon. The build imported all 36 top-level source objects and their child members, rebuilt the reachable application code and exported a non-empty boot application. A second build reused the same worker and loaded project successfully. The package's tests additionally cover source discovery, parsing, import failures and worker lifecycle behavior. Normal application compilation does not validate every unused implementation; see the [parser audit](../../docs/parser-audit.md).
 
 Native Windows and real PLC execution have not been exercised. A successful build verifies the example against this compiler/template combination; it is not a claim that every IEC extension or graphical language is supported.

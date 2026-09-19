@@ -47,8 +47,28 @@ const variableSections = new Set([
 	"VAR_ACCESS",
 	"VAR_GENERIC",
 ]);
-const isAttribute = (token?: Token) =>
-	token?.kind === "pragma" && /^\{\s*attribute\b/i.test(token.value);
+const closingObjects = new Set(
+	Object.keys(objectKinds).map((kind) => `END_${kind}`),
+);
+const declarationKeywords = new Set([
+	...Object.keys(objectKinds),
+	...closingObjects,
+	...variableSections,
+	"END_VAR",
+	"TYPE",
+	"END_TYPE",
+	"STRUCT",
+	"END_STRUCT",
+	"UNION",
+	"END_UNION",
+	"ACTION",
+	"END_ACTION",
+	"CONFIGURATION",
+	"END_CONFIGURATION",
+]);
+const isDeclarationPragma = (token?: Token) =>
+	token?.kind === "pragma" &&
+	!/^\{\s*(IF|ELSIF|ELSE|END_IF)\b/i.test(token.value);
 
 /** Parse only the object envelope and declarations. CODESYS validates the executable ST. */
 export const parseSource = (
@@ -81,44 +101,89 @@ export const parseSource = (
 		}
 		return take();
 	};
+	const declarationSemicolon = () => {
+		const token = peek();
+		const previous = tokens[cursor.index - 1];
+		// A semicolon on the next line may be the body's first empty statement.
+		// Only attach it to a declaration when it terminates that same line.
+		if (
+			token?.value === ";" &&
+			previous &&
+			!/[\r\n]/.test(source.slice(previous.end, token.start))
+		) {
+			take();
+		}
+	};
 	const identifier = () => {
 		const token = take();
-		if (token.kind !== "word" || token.value.startsWith("END_")) {
+		if (token.kind !== "word" || declarationKeywords.has(token.value)) {
 			fail("Expected an IEC identifier", token);
 		}
 		return source.slice(token.start, token.end);
 	};
+	const readModifiers = () => {
+		while (modifiers.has(peek()?.value ?? "")) {
+			if (peek()?.value === "OVERRIDE") {
+				// OVERRIDE is also an established IEC name (e.g. OSCAT's function).
+				// Only read it as a modifier when a header name follows on this line.
+				const next = tokens[cursor.index + 1];
+				if (
+					next?.kind !== "word" ||
+					declarationKeywords.has(next.value) ||
+					["(", "[", ":=", ".", "^"].includes(
+						tokens[cursor.index + 2]?.value ?? "",
+					) ||
+					/[\r\n]/.test(source.slice(peek()?.end, next.start))
+				) {
+					break;
+				}
+			}
+			take();
+		}
+	};
 	const balanced = (open: string, close: string) => {
 		expect(open);
-		let depth = 1;
-		while (depth) {
+		const stack = [close];
+		while (stack.length) {
 			const token = take();
-			if (token.value === open) {
-				depth++;
+			if (token.kind === "string" || token.kind === "pragma") {
+				continue;
 			}
-			if (token.value === close) {
-				depth--;
+			if (token.value === "(" || token.value === "[") {
+				stack.push(token.value === "(" ? ")" : "]");
+			} else if (token.value === ")" || token.value === "]") {
+				if (stack.pop() !== token.value) {
+					fail(`Mismatched delimiter ${token.value}`, token);
+				}
+			} else if (open === "<" && stack.at(-1) === ">") {
+				// A comparison inside a parenthesized generic argument is an expression,
+				// not another generic type: FB_Base<(Size := BOOL_TO_INT(1 < 2))>.
+				if (token.value === "<") {
+					stack.push(">");
+				}
+				if (token.value === ">") {
+					stack.pop();
+				}
 			}
-			if (token.value.startsWith("END_") || token.value === ";") {
+			if (declarationKeywords.has(token.value) || token.value === ";") {
 				fail(`Unclosed ${open}`, token);
 			}
 		}
 	};
 	const type = (): void => {
-		if (["POINTER", "REFERENCE", "REF_TO"].includes(peek()?.value ?? "")) {
-			const modifier = take();
-			if (modifier.value !== "REF_TO") {
-				expect("TO");
+		// Prefix types can nest arbitrarily; iteration avoids a JavaScript stack limit.
+		while (true) {
+			if (["POINTER", "REFERENCE", "REF_TO"].includes(peek()?.value ?? "")) {
+				if (take().value !== "REF_TO") {
+					expect("TO");
+				}
+			} else if (peek()?.value === "ARRAY") {
+				take();
+				balanced("[", "]");
+				expect("OF");
+			} else {
+				break;
 			}
-			type();
-			return;
-		}
-		if (peek()?.value === "ARRAY") {
-			take();
-			balanced("[", "]");
-			expect("OF");
-			type();
-			return;
 		}
 		identifier();
 		while (peek()?.value === ".") {
@@ -137,46 +202,56 @@ export const parseSource = (
 	};
 	const variableSection = () => {
 		take();
-		let conditionals = 0;
+		const conditionals: { hasElse: boolean }[] = [];
 		while (peek()?.value !== "END_VAR") {
 			const token = take();
 			if (
 				variableSections.has(token.value) ||
-				/^END_(PROGRAM|FUNCTION|FUNCTION_BLOCK|METHOD|INTERFACE|PROPERTY)$/.test(
-					token.value,
-				)
+				closingObjects.has(token.value)
 			) {
 				fail("Missing END_VAR", token);
 			}
 			if (token.kind === "pragma") {
-				if (/^\{\s*IF\b/i.test(token.value)) {
-					conditionals++;
-				}
-				if (/^\{\s*END_IF\b/i.test(token.value)) {
-					conditionals--;
-				}
-				if (conditionals < 0) {
-					fail("Unmatched conditional pragma", token);
+				const directive = /^\{\s*(IF|ELSIF|ELSE|END_IF)\b/i
+					.exec(token.value)?.[1]
+					?.toUpperCase();
+				if (directive === "IF") {
+					conditionals.push({ hasElse: false });
+				} else if (directive) {
+					const current = conditionals.at(-1);
+					if (!current) {
+						return fail("Unmatched conditional pragma", token);
+					}
+					if (directive === "END_IF") {
+						conditionals.pop();
+					} else {
+						if (current.hasElse) {
+							fail("Conditional branch after ELSE", token);
+						}
+						current.hasElse = directive === "ELSE";
+					}
 				}
 			}
 		}
-		if (conditionals) {
+		if (conditionals.length) {
 			fail("Conditional pragmas must remain inside one variable section");
 		}
 		take();
+		declarationSemicolon();
 	};
-	while (isAttribute(peek())) {
+	while (isDeclarationPragma(peek())) {
 		take();
 	}
 	const header = take();
 	if (header.value === "TYPE") {
+		readModifiers();
 		const name = identifier();
 		if (peek()?.value === "EXTENDS") {
 			take();
 			type();
 		}
 		expect(":");
-		while (isAttribute(peek())) {
+		while (isDeclarationPragma(peek())) {
 			take();
 		}
 		const start = peek()?.value;
@@ -193,6 +268,9 @@ export const parseSource = (
 			take();
 		}
 		take();
+		if (peek()?.value === ";") {
+			take();
+		}
 		if (peek()) {
 			fail("Unexpected content after END_TYPE");
 		}
@@ -201,8 +279,11 @@ export const parseSource = (
 	if (["VAR_GLOBAL", "VAR_CONFIG"].includes(header.value)) {
 		cursor.index--;
 		while (peek()) {
-			while (isAttribute(peek())) {
+			while (isDeclarationPragma(peek())) {
 				take();
+			}
+			if (!peek()) {
+				break;
 			}
 			if (!["VAR_GLOBAL", "VAR_CONFIG"].includes(peek()?.value ?? "")) {
 				fail("Expected a global variable section");
@@ -219,9 +300,7 @@ export const parseSource = (
 		fail(`Unsupported object header ${header.value}`, header);
 	}
 	const kind = objectKinds[header.value as keyof typeof objectKinds];
-	while (modifiers.has(peek()?.value ?? "")) {
-		take();
-	}
+	readModifiers();
 	const name = identifier();
 	const result: ParsedSource = { kind, name, declaration: "" };
 	if (peek()?.value === ":") {
@@ -231,13 +310,15 @@ export const parseSource = (
 		result.returnType = source
 			.slice(start, tokens[cursor.index - 1]?.end)
 			.trim();
-	} else if (kind === "function" || kind === "property") {
+	} else if (kind === "property") {
 		fail(`${header.value} requires a return type`);
 	}
+	// Exported declarations commonly terminate the header itself with a semicolon.
+	declarationSemicolon();
 	let declarationEnd = tokens[cursor.index - 1]?.end ?? 0;
 	while (peek()) {
 		const saved = cursor.index;
-		while (isAttribute(peek())) {
+		while (isDeclarationPragma(peek())) {
 			take();
 		}
 		const next = peek()?.value ?? "";
@@ -268,25 +349,25 @@ export const parseSource = (
 	const implementationTokens =
 		closing < 0 ? remaining : remaining.slice(0, closing);
 	const endToken = closing < 0 ? undefined : remaining[closing];
-	if (closing >= 0 && closing !== remaining.length - 1) {
-		fail(`Unexpected content after ${terminator}`, remaining[closing + 1]);
+	const closingSemicolon =
+		endToken && remaining[closing + 1]?.value === ";"
+			? remaining[closing + 1]
+			: undefined;
+	const trailing = closing + (closingSemicolon ? 2 : 1);
+	if (closing >= 0 && trailing !== remaining.length) {
+		fail(`Unexpected content after ${terminator}`, remaining[trailing]);
 	}
 	for (const token of implementationTokens) {
 		if (token.kind !== "word") {
 			continue;
 		}
-		if (variableSections.has(token.value) || token.value.startsWith("VAR_")) {
+		if (variableSections.has(token.value) || token.value === "END_VAR") {
 			fail(
 				"Variable declaration outside the declaration section; conditional declaration envelopes are not supported",
 				token,
 			);
 		}
-		if (
-			token.value in objectKinds ||
-			/^END_(PROGRAM|FUNCTION|FUNCTION_BLOCK|METHOD|INTERFACE|PROPERTY)$/.test(
-				token.value,
-			)
-		) {
+		if (declarationKeywords.has(token.value)) {
 			fail(
 				"Nested objects must be separate child files, or the object terminator is mismatched",
 				token,
@@ -305,12 +386,17 @@ export const parseSource = (
 	result.declaration = source.slice(0, declarationEnd);
 	if (options.declarationOnly || kind === "interface" || kind === "property") {
 		result.declaration = source.slice(0, endToken?.start ?? source.length);
+		if (endToken) {
+			result.declaration += source.slice(closingSemicolon?.end ?? endToken.end);
+		}
 		return result;
 	}
 	result.implementation = source.slice(declarationEnd, endToken?.start);
 	// Preserve a trailing comment after END_* in the implementation as well.
 	if (endToken) {
-		result.implementation += source.slice(endToken.end);
+		result.implementation += source.slice(
+			closingSemicolon?.end ?? endToken.end,
+		);
 	}
 	return result;
 };

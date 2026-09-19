@@ -52,11 +52,12 @@ Add `set.st` for a writable property. Accessors may start with local `VAR ... EN
 ## Syntax recognized by the splitter
 
 - PROGRAM, FUNCTION_BLOCK, FUNCTION and METHOD headers.
+- Optional function return values; optional same-line header/END_VAR semicolons and outer terminator semicolons.
 - Access/inheritance modifiers, qualified return types, pointer/reference types, strings with lengths, array return types and generic type arguments.
 - EXTENDS and IMPLEMENTS clauses, including clauses following `VAR_GENERIC CONSTANT`.
 - VAR, VAR_INPUT, VAR_OUTPUT, VAR_IN_OUT, VAR_TEMP, VAR_STAT, VAR_INST, VAR_EXTERNAL, VAR_ACCESS and VAR_GENERIC sections, with qualifiers such as CONSTANT/RETAIN/PERSISTENT.
 - Case-insensitive keywords, UTF-8 BOMs, LF/CRLF/CR line endings.
-- Line comments, nested `(* ... *)` comments, STRING/WSTRING literals with `$` escapes, and attribute pragmas.
+- Line comments, nested `(* ... *)` comments, STRING/WSTRING literals with `$` escapes, and declaration pragmas.
 - Conditional member declarations wholly contained within a variable section, and conditional pragmas in executable code.
 
 This is an envelope/declaration parser, not an IEC compiler. Variable types, initializer validity, executable expressions, inheritance legality and target-specific restrictions are validated by CODESYS. For example, recognizing a VAR section does not mean it is legal in every POU kind.
@@ -64,3 +65,7 @@ This is an envelope/declaration parser, not an IEC compiler. Variable types, ini
 Unsupported combined-file syntax fails explicitly where recognizable. There is no fallback that guesses a boundary after a parser error. Conditional compilation wrapping whole declaration sections, multiple/nested POUs in one file, and graphical implementations (LD/FBD/CFC/SFC/UML) are not supported. Keep nested methods/properties in child files. This package does not implement the CODESYS File-Based Storage serialization format.
 
 Source symlinks are rejected. Non-`.st` files are ignored. Avoid unrelated `.st` examples/backups inside the configured source tree: every source there must form a valid object. Folder names do not create namespaces, so two domains cannot define separate application objects with the same IEC name.
+
+`OVERRIDE` is also a valid object name. When used as a modifier, put the following name on the same line. Same-line header/END_VAR semicolons belong to the declaration; a semicolon on the next line is an empty implementation statement. Pragmas before another declaration section belong to the declaration, while trailing pragmas remain in the implementation. Use explicit pairs when an intended boundary cannot be inferred from these conventions.
+
+See the [parser audit](parser-audit.md) for real-code corpus results, regression cases, generated inputs and remaining limitations.

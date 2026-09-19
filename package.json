@@ -26,6 +26,7 @@
 	},
 	"scripts": {
 		"test": "bun test src tests",
+		"test:corpus": "bun tests/corpus/check.ts",
 		"test:python": "python3 -m unittest discover -s python -p 'test_*.py'",
 		"check": "biome check .",
 		"tsc": "tsc --noEmit"

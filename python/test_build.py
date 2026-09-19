@@ -168,6 +168,7 @@ class BuildTests(unittest.TestCase):
 			spec("dut", "ST_Data", dutType="structure"), spec("dut", "E_State", dutType="enumeration"),
 			spec("dut", "U_Data", dutType="union"), spec("dut", "T_Count", dutType="alias"),
 			spec("gvl", "Globals"), spec("function", "F_Add", returnType="INT", implementation="F_Add := 1;"),
+			spec("function", "F_NoReturn", implementation="RETURN;"),
 			spec("interface", "I_Test", [spec("method", "Run")]),
 			spec("function_block", "FB_Test", [spec("action", "Reset", implementation="X := 0;"),
 				spec("property", "Ready", [spec("get", "Get", implementation="Ready := TRUE;")], returnType="BOOL")], implementation=""),
@@ -177,6 +178,7 @@ class BuildTests(unittest.TestCase):
 		self.assertEqual([child.name for child in self.find("Ready").children], ["Get"])
 		self.assertEqual(self.find("Reset").implementation, "X := 0;")
 		self.assertEqual(self.find("T_Count").kind, "alias")
+		self.assertEqual(self.find("F_NoReturn").implementation, "RETURN;")
 	def test_reports_missing_task_instead_of_leaving_entry_unscheduled(self):
 		with self.assertRaisesRegex(RuntimeError, "one task named Missing"):
 			self.run_build(task="Missing")
